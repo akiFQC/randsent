@@ -10,7 +10,7 @@ import os, sys , copy
 import csv
 import torch
 import torch.nn as nn
-
+import json
 import numpy as np
 
 import utils
@@ -37,22 +37,6 @@ def batcher(params, batch):
     with torch.no_grad():
         vec = network.encode(batch, params)
     return vec
-
-def write_csv(file, save_dict):
-    save_row = {}
-
-    with open(file,'w') as f:
-        writer = csv.DictWriter(f, fieldnames=save_dict.keys(),delimiter=",",quotechar='"')
-        writer.writeheader()
-
-        k1 = list(save_dict.keys())[0]
-        length = len(save_dict[k1])
-
-        for i in range(length):
-            for k, vs in save_dict.items():
-                save_row[k] = vs[i]
-
-            writer.writerow(save_row)
 
 def get_results(params, seed):
     np.random.seed(seed)
@@ -171,7 +155,6 @@ if __name__ == '__main__':
     #LSTM parameters
     parser.add_argument("--num_layers", type=int,
                         help="Number of layers for random LSTM (default 1).", default=1)
-
     print(" ".join(sys.argv))
     params, remaining_args = parser.parse_known_args()
     assert remaining_args == []
@@ -190,6 +173,7 @@ if __name__ == '__main__':
     import senteval
 
     seeds = [10, 100, 1000, 10000, 100000]
+    
     total_results = {}
     for seed in seeds:
         results = get_results(params, seed)
@@ -197,22 +181,28 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
     
     if params.out_path is None:
-        params.out_path = "result_" + str(params.model) + "_" 
-    if not ".csv" in params.out_path :
-        params.out_path += ".csv"
-    dic_save = params.__dict__.copy()
-    
+        params.out_path = "result_" + str(params.model) + "_"
+    if not (os.path.dirname(params.out_path) is None or os.path.dirname(params.out_path) ==""):
+        os.makedirs(os.path.dirname(params.out_path), exist_ok=True)
+    ex = os.path.splitext(params.out_path)[1][1:]
+    if ex !="json" :
+        params.out_path = params.out_path.replace(ex, "json")
 
+    dic_save = copy.copy(params.__dict__)
+    dic_save["result"] = {}
+    
     for task, result in total_results.items():
         dev = [i[0] for i in result]
         test = [i[1] for i in result]
         print("{0} | {1:0.2f} {2:0.2f} | {3:0.2f} {4:0.2f}".format(task, np.mean(dev), np.std(dev),
                                                               np.mean(test), np.std(test)))
         
-        dic_save["result_"+str(task)+"_dev_mean"] = np.mean(dev)
-        dic_save["result_"+str(task)+"_dev_std"] = np.std(dev)
-        dic_save["result_"+str(task)+"_test_mean"] = np.mean(test)
-        dic_save["result_"+str(task)+"_test_std"] = np.std(test)
-
+        dic_save["result"][str(task)]= {"dev":{"mean": np.mean(dev)}}
+        dic_save["result"][str(task)]["dev"]["std"] = np.std(dev)
+        dic_save["result"][str(task)]= {"test":{"mean":np.mean(test)}}
+        dic_save["result"][str(task)]["test"]["std"] = np.std(test)
     
-    write_csv(dic_save, params.out_path)
+    print("out", params.out_path)
+    with open(params.out_path, "w") as f:
+        json.dump(dic_save, f)
+
