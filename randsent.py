@@ -6,8 +6,8 @@
 #
 
 import argparse
-import os, sys
-
+import os, sys , copy
+import csv
 import torch
 import torch.nn as nn
 
@@ -37,6 +37,22 @@ def batcher(params, batch):
     with torch.no_grad():
         vec = network.encode(batch, params)
     return vec
+
+def write_csv(file, save_dict):
+    save_row = {}
+
+    with open(file,'w') as f:
+        writer = csv.DictWriter(f, fieldnames=save_dict.keys(),delimiter=",",quotechar='"')
+        writer.writeheader()
+
+        k1 = list(save_dict.keys())[0]
+        length = len(save_dict[k1])
+
+        for i in range(length):
+            for k, vs in save_dict.items():
+                save_row[k] = vs[i]
+
+            writer.writerow(save_row)
 
 def get_results(params, seed):
     np.random.seed(seed)
@@ -88,8 +104,8 @@ def consolidate(results, total_results):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="RandSent - Random Sentence Representations")
-
-    parser.add_argument("--model",
+    parser.add_argument("--out-path", help="path to output", type=str, default=None)
+    parser.add_argument("--model", 
                 help="Type of model to use (either borep, esn, or lstm, default borep).",
                         choices=["borep","esn", "lstm"], default="borep")
     parser.add_argument("--task_type",
@@ -179,9 +195,24 @@ if __name__ == '__main__':
         results = get_results(params, seed)
         total_results = consolidate(results, total_results)
         torch.cuda.empty_cache()
+    
+    if params.out_path is None:
+        params.out_path = "result_" + str(params.model) + "_" 
+    if not ".csv" in params.out_path :
+        params.out_path += ".csv"
+    dic_save = params.__dict__.copy()
+    
 
     for task, result in total_results.items():
         dev = [i[0] for i in result]
         test = [i[1] for i in result]
         print("{0} | {1:0.2f} {2:0.2f} | {3:0.2f} {4:0.2f}".format(task, np.mean(dev), np.std(dev),
                                                               np.mean(test), np.std(test)))
+        
+        dic_save["result_"+str(task)+"_dev_mean"] = np.mean(dev)
+        dic_save["result_"+str(task)+"_dev_std"] = np.std(dev)
+        dic_save["result_"+str(task)+"_test_mean"] = np.mean(test)
+        dic_save["result_"+str(task)+"_test_std"] = np.std(test)
+
+    
+    write_csv(dic_save, params.out_path)
