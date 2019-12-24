@@ -158,7 +158,17 @@ if __name__ == '__main__':
     print(" ".join(sys.argv))
     params, remaining_args = parser.parse_known_args()
     assert remaining_args == []
-
+    # set json
+    if params.out_path is None:
+        params.out_path = "result_" + str(params.model) + "_"
+    if not (os.path.dirname(params.out_path) is None or os.path.dirname(params.out_path) ==""):
+        os.makedirs(os.path.dirname(params.out_path), exist_ok=True)
+    ex = os.path.splitext(params.out_path)[1][1:]
+    if ex !="json" :
+        params.out_path = params.out_path.replace(ex, "json")
+    dic_save = copy.copy(params.__dict__)
+    dic_save["result"] = {}
+    
     senteval_feat_dim = params.output_dim if not params.bidirectional else 2*params.output_dim
     params.activation = eval(params.activation)() if \
             (params.activation is not None and eval(params.activation) is not None) \
@@ -180,16 +190,7 @@ if __name__ == '__main__':
         total_results = consolidate(results, total_results)
         torch.cuda.empty_cache()
     
-    if params.out_path is None:
-        params.out_path = "result_" + str(params.model) + "_"
-    if not (os.path.dirname(params.out_path) is None or os.path.dirname(params.out_path) ==""):
-        os.makedirs(os.path.dirname(params.out_path), exist_ok=True)
-    ex = os.path.splitext(params.out_path)[1][1:]
-    if ex !="json" :
-        params.out_path = params.out_path.replace(ex, "json")
 
-    dic_save = copy.copy(params.__dict__)
-    dic_save["result"] = {}
     
     for task, result in total_results.items():
         dev = [i[0] for i in result]
